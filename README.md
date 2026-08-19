@@ -7,13 +7,15 @@ Duplicate File Finder
 Recursively detects files with identical contents using SHA-256 hashes. By default, it only reports duplicates and does not modify files.
 
 Features
-Scans nested directories
-Hashes files in chunks
-Safely moves duplicates to a quarantine folder
-Exports JSON and CSV reports
-Handles filename collisions in quarantine
-Includes automated tests and GitHub Actions CI
-Skips hashing files with unique sizes
+- Scans nested directories
+- Hashes files in chunks
+- Safely moves duplicates to a quarantine folder
+- Exports JSON and CSV reports
+- Handles filename collisions in quarantine
+- Includes automated tests and GitHub Actions CI
+- Skips hashing files with unique sizes
+- Scan metrics
+- Explicit pipeline stages
 
 Requirements
 Python 3.11 or newer
@@ -68,8 +70,6 @@ python -m ruff format --check .
 These checks also run automatically through GitHub Actions.
 
 Roadmap
-- Scan metrics
-- Explicit pipeline stages
 - DuckDB-backed incremental scans
 - Integration tests and performance benchmarks
 - Package publishing
