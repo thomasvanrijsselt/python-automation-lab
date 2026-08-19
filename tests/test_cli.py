@@ -53,3 +53,25 @@ def test_cli_moves_duplicates_with_move_flag(
 
     remaining_files = [path for path in tmp_path.iterdir() if path.is_file()]
     assert len(remaining_files) == 1
+
+
+def test_cli_writes_json_report(tmp_path, monkeypatch):
+    (tmp_path / "original.txt").write_text("same content")
+    (tmp_path / "duplicate.txt").write_text("same content")
+
+    report_path = tmp_path.parent / "duplicates.json"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "find-duplicates",
+            str(tmp_path),
+            "--report",
+            str(report_path),
+        ],
+    )
+
+    main()
+
+    assert report_path.exists()
