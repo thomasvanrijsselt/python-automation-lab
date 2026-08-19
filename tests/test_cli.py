@@ -1,5 +1,7 @@
 import sys
 
+import duckdb
+
 from automation_lab.duplicates import main
 
 
@@ -75,3 +77,36 @@ def test_cli_writes_json_report(tmp_path, monkeypatch):
     main()
 
     assert report_path.exists()
+
+
+def test_cli_persists_scan_history(
+    tmp_path,
+    monkeypatch,
+):
+    scan_folder = tmp_path / "scan"
+    scan_folder.mkdir()
+
+    (scan_folder / "original.txt").write_text("same content")
+    (scan_folder / "duplicate.txt").write_text("same content")
+
+    database_path = tmp_path / "history.duckdb"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "find-duplicates",
+            str(scan_folder),
+            "--database",
+            str(database_path),
+        ],
+    )
+
+    main()
+
+    assert database_path.exists()
+
+    with duckdb.connect(str(database_path)) as connection:
+        scan_count = connection.execute("SELECT COUNT(*) FROM scan_runs").fetchone()[0]
+
+    assert scan_count == 1

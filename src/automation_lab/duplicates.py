@@ -5,6 +5,7 @@ from pathlib import Path
 from automation_lab.models import DuplicateGroup, ScanStats
 from automation_lab.reporting import write_report
 from automation_lab.scanner import find_duplicates
+from automation_lab.storage import persist_scan_result
 
 
 def main() -> None:
@@ -27,6 +28,14 @@ def main() -> None:
         print(f"Report written to: {args.report}")
 
     print(f"Total reclaimable space: {format_file_size(reclaimable_bytes)}")
+
+    if args.database:
+        scan_id = persist_scan_result(
+            database_path=args.database,
+            root_path=scan_folder,
+            scan_result=scan_result,
+        )
+        print(f"Scan history saved with ID: {scan_id}")
 
     if args.move:
         move_duplicate_files(cleanup_plan, quarantine_folder)
@@ -53,6 +62,11 @@ def parse_argument() -> argparse.Namespace:
         "--report",
         type=Path,
         help="Write the duplicate report to a .json or .csv file.",
+    )
+    parser.add_argument(
+        "--database",
+        type=Path,
+        help="Persist scan history to a DuckDB database.",
     )
 
     return parser.parse_args()
