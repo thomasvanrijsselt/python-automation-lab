@@ -1,6 +1,7 @@
 import pytest
 
 import automation_lab.scanner as scanner_module
+from automation_lab.models import ScanStats
 from automation_lab.scanner import find_duplicates
 
 
@@ -18,9 +19,9 @@ def test_finds_duplicate_files_across_nested_directories(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert len(result) == 1
+    assert len(result.duplicate_groups) == 1
 
-    duplicate_records = result[0].files
+    duplicate_records = result.duplicate_groups[0].files
     duplicate_names = {file_record.path.name for file_record in duplicate_records}
 
     assert duplicate_names == {
@@ -36,7 +37,7 @@ def test_ignores_unique_files(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert result == []
+    assert result.duplicate_groups == ()
 
 
 def test_finds_multiple_duplicate_groups(tmp_path):
@@ -48,7 +49,7 @@ def test_finds_multiple_duplicate_groups(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert len(result) == 2
+    assert len(result.duplicate_groups) == 2
 
 
 def test_missing_directory_raises_file_not_found_error(tmp_path):
@@ -77,7 +78,12 @@ def test_find_duplicates_ignores_quarantine(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert result == []
+    assert result.duplicate_groups == ()
+    assert result.stats == ScanStats(
+        discovered_files=1,
+        hashed_files=0,
+        skipped_files=1,
+    )
 
 
 def test_unique_size_files_are_not_hashed(tmp_path, monkeypatch):
@@ -99,7 +105,12 @@ def test_unique_size_files_are_not_hashed(tmp_path, monkeypatch):
 
     result = find_duplicates(tmp_path)
 
-    assert result == []
+    assert result.duplicate_groups == ()
+    assert result.stats == ScanStats(
+        discovered_files=3,
+        hashed_files=0,
+        skipped_files=3,
+    )
     assert hashed_files == []
 
 
@@ -109,4 +120,24 @@ def test_same_size_files_with_different_contents_are_not_duplicates(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert result == []
+    assert result.duplicate_groups == ()
+    assert result.stats == ScanStats(
+        discovered_files=2,
+        hashed_files=2,
+        skipped_files=0,
+    )
+
+
+def test_scan_stats_count_discovered_hashed_and_skipped_files(tmp_path):
+    (tmp_path / "original.txt").write_text("same")
+    (tmp_path / "duplicate.txt").write_text("same")
+    (tmp_path / "unique.txt").write_text("different size")
+
+    result = find_duplicates(tmp_path)
+
+    assert len(result.duplicate_groups) == 1
+    assert result.stats == ScanStats(
+        discovered_files=3,
+        hashed_files=2,
+        skipped_files=1,
+    )

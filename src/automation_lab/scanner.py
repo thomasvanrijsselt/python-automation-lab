@@ -1,7 +1,12 @@
 import hashlib
 from pathlib import Path
 
-from automation_lab.models import DuplicateGroup, FileRecord
+from automation_lab.models import (
+    DuplicateGroup,
+    FileRecord,
+    ScanResult,
+    ScanStats,
+)
 
 
 def calculate_hash(file_path: Path) -> str:
@@ -82,8 +87,8 @@ def create_duplicate_groups(
     return duplicate_groups
 
 
-def find_duplicates(folder: Path) -> list[DuplicateGroup]:
-    """Find content-identical files, hashing only equal-size candidates."""
+def find_duplicates(folder: Path) -> ScanResult:
+    """Find duplicate files and return groups with scan statistics."""
     validate_scan_folder(folder)
 
     discovered_files = discover_files(folder)
@@ -91,4 +96,18 @@ def find_duplicates(folder: Path) -> list[DuplicateGroup]:
     files_by_hash = hash_candidate_files(files_by_size)
     duplicate_groups = create_duplicate_groups(files_by_hash)
 
-    return duplicate_groups
+    hashed_file_count = sum(
+        len(files) for files in files_by_size.values() if len(files) > 1
+    )
+
+    scan_stats = ScanStats(
+        discovered_files=len(discovered_files),
+        hashed_files=hashed_file_count,
+        skipped_files=len(discovered_files) - hashed_file_count,
+    )
+
+    scan_result = ScanResult(
+        duplicate_groups=tuple(duplicate_groups),
+        stats=scan_stats,
+    )
+    return scan_result
