@@ -13,6 +13,8 @@ Safely moves duplicates to a quarantine folder
 Exports JSON and CSV reports
 Handles filename collisions in quarantine
 Includes automated tests and GitHub Actions CI
+Skips hashing files with unique sizes
+
 Requirements
 Python 3.11 or newer
 Installation
@@ -68,7 +70,6 @@ These checks also run automatically through GitHub Actions.
 Roadmap
 Typed file and duplicate-group models
 Explicit pipeline stages
-Size-first hashing optimisation
 DuckDB-backed incremental scans
 Integration tests and performance benchmarks
 Package publishing

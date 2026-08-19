@@ -69,18 +69,29 @@ def find_duplicates(folder: Path) -> dict[str, list[Path]]:
     if not folder.is_dir():
         raise NotADirectoryError(f"Folder not correct, it is a file {folder}")
 
-    files_by_hash = {}
     quarantine_folder = folder / ".duplicates_quarantine"
+    files_by_size: dict[int, list[Path]] = {}
 
     for path in folder.rglob("*"):
         if quarantine_folder in path.parents:
             continue
+
         if path.is_file():
+            file_size = path.stat().st_size
+            files_by_size.setdefault(file_size, []).append(path)
+
+    files_by_hash: dict[str, list[Path]] = {}
+
+    for files_with_same_size in files_by_size.values():
+        if len(files_with_same_size) == 1:
+            continue
+
+        for path in files_with_same_size:
             file_hash = calculate_hash(path)
             files_by_hash.setdefault(file_hash, []).append(path)
 
     duplicate_files_by_hash = {
-        key: value for key, value in files_by_hash.items() if len(value) > 1
+        file_hash: files for file_hash, files in files_by_hash.items() if len(files) > 1
     }
 
     return duplicate_files_by_hash
