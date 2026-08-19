@@ -68,8 +68,8 @@ python -m ruff format --check .
 These checks also run automatically through GitHub Actions.
 
 Roadmap
-Typed file and duplicate-group models
-Explicit pipeline stages
-DuckDB-backed incremental scans
-Integration tests and performance benchmarks
-Package publishing
+- Scan metrics
+- Explicit pipeline stages
+- DuckDB-backed incremental scans
+- Integration tests and performance benchmarks
+- Package publishing

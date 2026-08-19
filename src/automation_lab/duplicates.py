@@ -3,6 +3,7 @@ import hashlib
 import shutil
 from pathlib import Path
 
+from automation_lab.models import DuplicateGroup, FileRecord
 from automation_lab.reporting import write_report
 
 
@@ -63,49 +64,61 @@ def calculate_hash(file_path: Path) -> str:
         return hasher.hexdigest()
 
 
-def find_duplicates(folder: Path) -> dict[str, list[Path]]:
+def find_duplicates(folder: Path) -> list[DuplicateGroup]:
+    """Find content-identical files, hashing only equal-size candidates."""
     if not folder.exists():
         raise FileNotFoundError(f"Folder not correct, it doesn't exist {folder}")
     if not folder.is_dir():
         raise NotADirectoryError(f"Folder not correct, it is a file {folder}")
 
     quarantine_folder = folder / ".duplicates_quarantine"
-    files_by_size: dict[int, list[Path]] = {}
+    files_by_size: dict[int, list[FileRecord]] = {}
 
     for path in folder.rglob("*"):
         if quarantine_folder in path.parents:
             continue
 
         if path.is_file():
-            file_size = path.stat().st_size
-            files_by_size.setdefault(file_size, []).append(path)
+            file_record = FileRecord(
+                path=path,
+                size_bytes=path.stat().st_size,
+            )
+            files_by_size.setdefault(file_record.size_bytes, []).append(file_record)
 
-    files_by_hash: dict[str, list[Path]] = {}
+    files_by_hash: dict[str, list[FileRecord]] = {}
 
     for files_with_same_size in files_by_size.values():
         if len(files_with_same_size) == 1:
             continue
 
-        for path in files_with_same_size:
-            file_hash = calculate_hash(path)
-            files_by_hash.setdefault(file_hash, []).append(path)
+        for file_record in files_with_same_size:
+            file_hash = calculate_hash(file_record.path)
+            files_by_hash.setdefault(file_hash, []).append(file_record)
 
-    duplicate_files_by_hash = {
-        file_hash: files for file_hash, files in files_by_hash.items() if len(files) > 1
-    }
+    duplicate_groups = [
+        DuplicateGroup(
+            file_hash=file_hash,
+            files=tuple(files),
+        )
+        for file_hash, files in files_by_hash.items()
+        if len(files) > 1
+    ]
 
-    return duplicate_files_by_hash
+    return duplicate_groups
 
 
 def create_cleanup_plan(
-    duplicate_groups: dict[str, list[Path]],
+    duplicate_groups: list[DuplicateGroup],
 ) -> dict[Path, list[Path]]:
     cleanup_plan = {}
-    for group in duplicate_groups.values():
-        if len(group) < 2:
+
+    for group in duplicate_groups:
+        if len(group.files) < 2:
             continue
-        file_to_keep = group[0]
-        files_to_remove = group[1:]
+
+        file_to_keep = group.files[0].path
+        files_to_remove = [file_record.path for file_record in group.files[1:]]
+
         cleanup_plan[file_to_keep] = files_to_remove
 
     return cleanup_plan
@@ -131,7 +144,7 @@ def format_file_size(size_in_bytes: int) -> str:
 
 
 def move_duplicate_files(
-    cleanup_plan: dict[Path, list[Path]],
+    cleanup_plan: dict[Path, list[DuplicateGroup]],
     quarantine_folder: Path,
 ) -> list[Path]:
     quarantine_folder.mkdir(parents=True, exist_ok=True)
@@ -149,6 +162,7 @@ def move_duplicate_files(
 
 
 def create_unique_destination(quarantine_folder: Path, source_file: Path) -> Path:
+    """Return an available quarantine path without overwriting existing files."""
     destination = quarantine_folder / source_file.name
     counter = 1
     while destination.exists():
@@ -161,9 +175,9 @@ def create_unique_destination(quarantine_folder: Path, source_file: Path) -> Pat
 
 
 def print_duplicate_report(
-    duplicates_by_hash: dict[str, list[Path]],
+    duplicate_groups: list[DuplicateGroup],
 ) -> None:
-    duplicate_group_count = len(duplicates_by_hash)
+    duplicate_group_count = len(duplicate_groups)
 
     if duplicate_group_count == 0:
         print("No duplicate files found.")
@@ -171,13 +185,11 @@ def print_duplicate_report(
 
     print(f"Found {duplicate_group_count} duplicate groups.")
 
-    for group_number, files in enumerate(
-        duplicates_by_hash.values(),
-        start=1,
-    ):
+    for group_number, group in enumerate(duplicate_groups, start=1):
         print(f"Group {group_number} has the following duplicate files:")
-        for file in files:
-            print(f"\t{file.name}")
+
+        for file_record in group.files:
+            print(f"\t{file_record.path.name}")
 
 
 if __name__ == "__main__":

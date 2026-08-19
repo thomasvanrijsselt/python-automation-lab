@@ -2,15 +2,17 @@ import csv
 import json
 from pathlib import Path
 
+from automation_lab.models import DuplicateGroup
+
 ReportRow = dict[str, str | int]
 
 
 def write_report(
-    duplicates: dict[str, list[Path]],
+    duplicate_goups: list[DuplicateGroup],
     report_path: Path,
 ) -> None:
     """Write duplicate-file information to a JSON or CSV report."""
-    rows = create_report_rows(duplicates)
+    rows = create_report_rows(duplicate_goups)
     suffix = report_path.suffix.lower()
 
     if suffix == ".json":
@@ -22,22 +24,19 @@ def write_report(
 
 
 def create_report_rows(
-    duplicates: dict[str, list[Path]],
+    duplicate_groups: list[DuplicateGroup],
 ) -> list[ReportRow]:
     """Convert duplicate groups into records suitable for reporting."""
-    rows = []
+    rows: list[ReportRow] = []
 
-    for group_id, (file_hash, files) in enumerate(
-        duplicates.items(),
-        start=1,
-    ):
-        for position, file_path in enumerate(files):
+    for group_id, group in enumerate(duplicate_groups, start=1):
+        for position, file_record in enumerate(group.files):
             rows.append(
                 {
                     "group_id": group_id,
-                    "hash": file_hash,
-                    "file_path": str(file_path.resolve()),
-                    "size_bytes": file_path.stat().st_size,
+                    "hash": group.file_hash,
+                    "file_path": str(file_record.path.resolve()),
+                    "size_bytes": file_record.size_bytes,
                     "action": "keep" if position == 0 else "quarantine",
                 }
             )

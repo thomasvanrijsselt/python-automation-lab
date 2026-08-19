@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from automation_lab.models import DuplicateGroup, FileRecord
 from automation_lab.reporting import create_report_rows, write_report
 
 
@@ -14,9 +15,15 @@ def duplicate_group(tmp_path):
     original.write_text("same content")
     duplicate.write_text("same content")
 
-    return {
-        "example-hash": [original, duplicate],
-    }
+    return [
+        DuplicateGroup(
+            file_hash="example-hash",
+            files=(
+                FileRecord(original, original.stat().st_size),
+                FileRecord(duplicate, duplicate.stat().st_size),
+            ),
+        )
+    ]
 
 
 def test_create_report_rows_marks_first_file_to_keep(duplicate_group):
@@ -62,7 +69,7 @@ def test_writes_csv_report(tmp_path, duplicate_group):
 def test_empty_json_report_contains_empty_list(tmp_path):
     report_path = tmp_path / "report.json"
 
-    write_report({}, report_path)
+    write_report([], report_path)
 
     assert json.loads(report_path.read_text(encoding="utf-8")) == []
 
@@ -70,7 +77,7 @@ def test_empty_json_report_contains_empty_list(tmp_path):
 def test_empty_csv_report_contains_headers(tmp_path):
     report_path = tmp_path / "report.csv"
 
-    write_report({}, report_path)
+    write_report([], report_path)
 
     with report_path.open(encoding="utf-8", newline="") as file:
         rows = list(csv.DictReader(file))
@@ -85,4 +92,4 @@ def test_rejects_unsupported_report_format(tmp_path):
         ValueError,
         match=r"Report file must have a \.json or \.csv extension",
     ):
-        write_report({}, report_path)
+        write_report([], report_path)

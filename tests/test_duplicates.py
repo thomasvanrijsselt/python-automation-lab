@@ -11,6 +11,7 @@ from automation_lab.duplicates import (
     format_file_size,
     move_duplicate_files,
 )
+from automation_lab.models import DuplicateGroup, FileRecord
 
 
 def test_finds_duplicate_files_across_nested_directories(tmp_path):
@@ -29,8 +30,8 @@ def test_finds_duplicate_files_across_nested_directories(tmp_path):
 
     assert len(result) == 1
 
-    duplicate_paths = next(iter(result.values()))
-    duplicate_names = {path.name for path in duplicate_paths}
+    duplicate_records = result[0].files
+    duplicate_names = {file_record.path.name for file_record in duplicate_records}
 
     assert duplicate_names == {
         "test1 copy.txt",
@@ -45,7 +46,7 @@ def test_ignores_unique_files(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert result == {}
+    assert result == []
 
 
 def test_finds_multiple_duplicate_groups(tmp_path):
@@ -76,18 +77,33 @@ def test_file_path_raises_not_a_directory_error(tmp_path):
 
 
 def test_create_cleanup_plan_keeps_first_file():
-    file_1 = Path("original.txt")
-    file_2 = Path("copy-1.txt")
-    file_3 = Path("copy-2.txt")
+    file_1 = FileRecord(
+        path=Path("original.txt"),
+        size_bytes=100,
+    )
+    file_2 = FileRecord(
+        path=Path("copy-1.txt"),
+        size_bytes=100,
+    )
+    file_3 = FileRecord(
+        path=Path("copy-2.txt"),
+        size_bytes=100,
+    )
 
-    duplicate_groups = {
-        "some-hash": [file_1, file_2, file_3],
-    }
+    duplicate_groups = [
+        DuplicateGroup(
+            file_hash="some-hash",
+            files=(file_1, file_2, file_3),
+        )
+    ]
 
     result = create_cleanup_plan(duplicate_groups)
 
     assert result == {
-        file_1: [file_2, file_3],
+        file_1.path: [
+            file_2.path,
+            file_3.path,
+        ]
     }
 
 
@@ -125,7 +141,7 @@ def test_find_duplicates_ignores_quarantine(tmp_path):
 
     duplicates = find_duplicates(tmp_path)
 
-    assert duplicates == {}
+    assert duplicates == []
 
 
 def test_move_duplicate_files_to_quarantine(tmp_path):
@@ -186,7 +202,7 @@ def test_unique_size_files_are_not_hashed(tmp_path, monkeypatch):
 
     result = find_duplicates(tmp_path)
 
-    assert result == {}
+    assert result == []
     assert hashed_files == []
 
 
@@ -196,4 +212,4 @@ def test_same_size_files_with_different_contents_are_not_duplicates(tmp_path):
 
     result = find_duplicates(tmp_path)
 
-    assert result == {}
+    assert result == []
