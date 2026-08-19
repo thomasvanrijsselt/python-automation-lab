@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import automation_lab.duplicates as duplicates_module
 from automation_lab.duplicates import (
     calculate_reclaimable_bytes,
     create_cleanup_plan,
@@ -164,3 +165,35 @@ def test_create_unique_destination_adds_counter(tmp_path):
     result = create_unique_destination(tmp_path, source)
 
     assert result == tmp_path / "duplicate-2.txt"
+
+
+def test_unique_size_files_are_not_hashed(tmp_path, monkeypatch):
+    (tmp_path / "one-byte.txt").write_text("a")
+    (tmp_path / "two-bytes.txt").write_text("bb")
+    (tmp_path / "three-bytes.txt").write_text("ccc")
+
+    hashed_files = []
+
+    def record_hash_call(file_path):
+        hashed_files.append(file_path)
+        return "unused-hash"
+
+    monkeypatch.setattr(
+        duplicates_module,
+        "calculate_hash",
+        record_hash_call,
+    )
+
+    result = find_duplicates(tmp_path)
+
+    assert result == {}
+    assert hashed_files == []
+
+
+def test_same_size_files_with_different_contents_are_not_duplicates(tmp_path):
+    (tmp_path / "first.txt").write_text("abcd")
+    (tmp_path / "second.txt").write_text("wxyz")
+
+    result = find_duplicates(tmp_path)
+
+    assert result == {}
