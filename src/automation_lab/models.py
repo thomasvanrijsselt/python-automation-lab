@@ -6,6 +6,7 @@ from pathlib import Path
 class FileRecord:
     path: Path
     size_bytes: int
+    modified_ns: int
 
 
 @dataclass(frozen=True)

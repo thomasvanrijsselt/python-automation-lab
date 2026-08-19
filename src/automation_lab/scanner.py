@@ -35,12 +35,15 @@ def discover_files(folder: Path) -> list[FileRecord]:
             continue
 
         if path.is_file():
-            discovered_files.append(
-                FileRecord(
-                    path=path,
-                    size_bytes=path.stat().st_size,
-                )
+            file_stat = path.stat()
+
+            file_record = FileRecord(
+                path=path,
+                size_bytes=file_stat.st_size,
+                modified_ns=file_stat.st_mtime_ns,
             )
+
+            discovered_files.append(file_record)
 
     return discovered_files
 

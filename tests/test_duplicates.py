@@ -14,14 +14,17 @@ def test_create_cleanup_plan_keeps_first_file():
     file_1 = FileRecord(
         path=Path("original.txt"),
         size_bytes=100,
+        modified_ns=123456789,
     )
     file_2 = FileRecord(
         path=Path("copy-1.txt"),
         size_bytes=100,
+        modified_ns=123456789,
     )
     file_3 = FileRecord(
         path=Path("copy-2.txt"),
         size_bytes=100,
+        modified_ns=123456789,
     )
 
     duplicate_groups = [

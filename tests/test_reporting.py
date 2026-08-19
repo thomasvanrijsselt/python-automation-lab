@@ -19,8 +19,8 @@ def duplicate_group(tmp_path):
         DuplicateGroup(
             file_hash="example-hash",
             files=(
-                FileRecord(original, original.stat().st_size),
-                FileRecord(duplicate, duplicate.stat().st_size),
+                FileRecord(original, original.stat().st_size, original.stat().st_mtime_ns),
+                FileRecord(duplicate, duplicate.stat().st_size, duplicate.stat().st_mtime_ns),
             ),
         )
     ]

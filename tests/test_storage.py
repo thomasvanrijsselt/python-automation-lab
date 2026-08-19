@@ -24,10 +24,12 @@ def test_persists_scan_run_and_duplicate_files(tmp_path):
                     FileRecord(
                         path=original,
                         size_bytes=12,
+                        modified_ns=123456789,
                     ),
                     FileRecord(
                         path=duplicate,
                         size_bytes=12,
+                        modified_ns=123456789,
                     ),
                 ),
             ),
