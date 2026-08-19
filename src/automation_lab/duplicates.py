@@ -2,7 +2,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-from automation_lab.models import DuplicateGroup
+from automation_lab.models import DuplicateGroup, ScanStats
 from automation_lab.reporting import write_report
 from automation_lab.scanner import find_duplicates
 
@@ -13,11 +13,14 @@ def main() -> None:
     scan_folder = args.folder.resolve()
     quarantine_folder = scan_folder / ".duplicates_quarantine"
 
-    duplicate_groups = find_duplicates(scan_folder)
+    scan_result = find_duplicates(scan_folder)
+    duplicate_groups = list(scan_result.duplicate_groups)
+
     cleanup_plan = create_cleanup_plan(duplicate_groups)
     reclaimable_bytes = calculate_reclaimable_bytes(cleanup_plan)
 
     print_duplicate_report(duplicate_groups)
+    print_scan_stats(scan_result.stats)
 
     if args.report:
         write_report(duplicate_groups, args.report)
@@ -150,6 +153,12 @@ def print_duplicate_report(
 
         for file_record in group.files:
             print(f"\t{file_record.path.name}")
+
+
+def print_scan_stats(scan_stats: ScanStats) -> None:
+    print(f"Files discovered: {scan_stats.discovered_files}")
+    print(f"Files hashed: {scan_stats.hashed_files}")
+    print(f"Files skipped from hashing: {scan_stats.skipped_files}")
 
 
 if __name__ == "__main__":

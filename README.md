@@ -16,6 +16,7 @@ Features
 - Skips hashing files with unique sizes
 - Scan metrics
 - Explicit pipeline stages
+- Shows discovered, hashed and skipped file counts
 
 Requirements
 Python 3.11 or newer
