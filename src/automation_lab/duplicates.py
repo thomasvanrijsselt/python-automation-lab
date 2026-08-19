@@ -3,8 +3,10 @@ import hashlib
 import shutil
 from pathlib import Path
 
+from automation_lab.reporting import write_report
 
-def main():
+
+def main() -> None:
     args = parse_argument()
 
     scan_folder = args.folder.resolve()
@@ -15,6 +17,11 @@ def main():
     reclaimable_bytes = calculate_reclaimable_bytes(cleanup_plan)
 
     print_duplicate_report(duplicates)
+
+    if args.report:
+        write_report(duplicates, args.report)
+        print(f"Report written to: {args.report}")
+
     print(f"Total reclaimable space: {format_file_size(reclaimable_bytes)}")
 
     if args.move:
@@ -37,6 +44,11 @@ def parse_argument() -> argparse.Namespace:
         "--move",
         action="store_true",
         help="Move duplicate files to a quarantine folder.",
+    )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="Write the duplicate report to a .json or .csv file.",
     )
     return parser.parse_args()
 
@@ -137,20 +149,24 @@ def create_unique_destination(quarantine_folder: Path, source_file: Path) -> Pat
     return destination
 
 
-def print_duplicate_report(duplicates_by_hash) -> None:
+def print_duplicate_report(
+    duplicates_by_hash: dict[str, list[Path]],
+) -> None:
     duplicate_group_count = len(duplicates_by_hash)
 
-    if duplicate_group_count > 0:
-        print(f"Found {duplicate_group_count} duplicate groups.")
-    else:
-        print("No duplicate file found.")
-    if duplicate_group_count > 0:
-        i = 1
-        for list_of_files in duplicates_by_hash.values():
-            print(f"Group {i} has the following duplicated files: ")
-            i += 1
-            for file in list_of_files:
-                print(f"\t{file.name}")
+    if duplicate_group_count == 0:
+        print("No duplicate files found.")
+        return
+
+    print(f"Found {duplicate_group_count} duplicate groups.")
+
+    for group_number, files in enumerate(
+        duplicates_by_hash.values(),
+        start=1,
+    ):
+        print(f"Group {group_number} has the following duplicate files:")
+        for file in files:
+            print(f"\t{file.name}")
 
 
 if __name__ == "__main__":
