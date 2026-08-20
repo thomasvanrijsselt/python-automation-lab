@@ -4,23 +4,21 @@ Practical Python automation tools built with testing, CI and command-line interf
 
 ## Duplicate File Finder
 
-Detects files with identical contents using SHA-256. Files with unique sizes are not hashed, reducing unnecessary work. Files are only moved when `--move` is supplied.
+Detects files with identical contents using SHA-256. Files with unique sizes are not hashed, and files are only moved when `--move` is supplied.
 
 ### Features
 
 * Scans nested directories
 * Hashes equal-size candidates in chunks
+* Reuses unchanged hashes through a DuckDB cache
 * Exports JSON and CSV reports
-* Persists scan history in DuckDB
-* Shows discovered, hashed and skipped file counts
+* Persists scan history and metrics
 * Safely moves duplicates to quarantine
 * Includes pytest tests and GitHub Actions CI
 
-## Requirements
-
-* Python 3.11 or newer
-
 ## Installation
+
+Requires Python 3.11 or newer.
 
 ```bash
 git clone https://github.com/thomasvanrijsselt/python-automation-lab.git
@@ -46,9 +44,8 @@ find-duplicates /path/to/directory
 find-duplicates /path/to/directory --report duplicates.json
 find-duplicates /path/to/directory --report duplicates.csv
 
-# Persist scan history
+# Persist history and reuse unchanged hashes
 find-duplicates ~/Downloads --database ~/download-scans.duckdb
-> **Important:** Store the DuckDB database outside the scanned directory. Otherwise, the database may be scanned as an input file and change while the scan is running.
 
 # Move duplicates to quarantine
 find-duplicates /path/to/directory --move
@@ -57,9 +54,11 @@ find-duplicates /path/to/directory --move
 find-duplicates --help
 ```
 
+> **Important:** Store the DuckDB database outside the scanned directory. Otherwise, it may be included as an input file and change while the scan is running.
+
 Reports contain each duplicate group, hash, file path, size and recommended action.
 
-The DuckDB database stores scan metrics in `scan_runs` and detected duplicate files in `duplicate_files`. Store it outside the scanned directory so it is not included in later scans.
+DuckDB stores scan metrics in `scan_runs`, duplicate results in `duplicate_files` and reusable hashes in `file_cache`. A hash is reused when the file path, size and modification time are unchanged.
 
 The first file in each duplicate group is kept. Other copies are moved to `.duplicates_quarantine`; files are never deleted.
 
@@ -83,7 +82,6 @@ These checks also run through GitHub Actions.
 
 ## Roadmap
 
-* Reuse unchanged hashes during incremental scans
 * Compare scan history
 * Add performance benchmarks
 * Publish the package
