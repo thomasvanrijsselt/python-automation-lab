@@ -4,6 +4,7 @@ from pathlib import Path
 from automation_lab.models import (
     DuplicateGroup,
     FileRecord,
+    HashedFile,
     ScanResult,
     ScanStats,
 )
@@ -35,12 +36,15 @@ def discover_files(folder: Path) -> list[FileRecord]:
             continue
 
         if path.is_file():
-            discovered_files.append(
-                FileRecord(
-                    path=path,
-                    size_bytes=path.stat().st_size,
-                )
+            file_stat = path.stat()
+
+            file_record = FileRecord(
+                path=path,
+                size_bytes=file_stat.st_size,
+                modified_ns=file_stat.st_mtime_ns,
             )
+
+            discovered_files.append(file_record)
 
     return discovered_files
 
@@ -58,8 +62,8 @@ def group_files_by_size(
 
 def hash_candidate_files(
     files_by_size: dict[int, list[FileRecord]],
-) -> dict[str, list[FileRecord]]:
-    files_by_hash: dict[str, list[FileRecord]] = {}
+) -> tuple[HashedFile, ...]:
+    hashed_files: list[HashedFile] = []
 
     for files_with_same_size in files_by_size.values():
         if len(files_with_same_size) == 1:
@@ -67,14 +71,29 @@ def hash_candidate_files(
 
         for file_record in files_with_same_size:
             file_hash = calculate_hash(file_record.path)
-            files_by_hash.setdefault(file_hash, []).append(file_record)
 
-    return files_by_hash
+            hashed_files.append(
+                HashedFile(
+                    file=file_record,
+                    file_hash=file_hash,
+                    reused=False,
+                )
+            )
+
+    return tuple(hashed_files)
 
 
 def create_duplicate_groups(
-    files_by_hash: dict[str, list[FileRecord]],
+    hashed_files: tuple[HashedFile, ...],
 ) -> list[DuplicateGroup]:
+    files_by_hash: dict[str, list[FileRecord]] = {}
+
+    for hashed_file in hashed_files:
+        files_by_hash.setdefault(
+            hashed_file.file_hash,
+            [],
+        ).append(hashed_file.file)
+
     duplicate_groups = [
         DuplicateGroup(
             file_hash=file_hash,
@@ -93,21 +112,18 @@ def find_duplicates(folder: Path) -> ScanResult:
 
     discovered_files = discover_files(folder)
     files_by_size = group_files_by_size(discovered_files)
-    files_by_hash = hash_candidate_files(files_by_size)
-    duplicate_groups = create_duplicate_groups(files_by_hash)
-
-    hashed_file_count = sum(
-        len(files) for files in files_by_size.values() if len(files) > 1
-    )
+    hashed_files = hash_candidate_files(files_by_size)
+    duplicate_groups = create_duplicate_groups(hashed_files)
 
     scan_stats = ScanStats(
         discovered_files=len(discovered_files),
-        hashed_files=hashed_file_count,
-        skipped_files=len(discovered_files) - hashed_file_count,
+        hashed_files=len(hashed_files),
+        skipped_files=len(discovered_files) - len(hashed_files),
     )
 
     scan_result = ScanResult(
         duplicate_groups=tuple(duplicate_groups),
+        hashed_files=hashed_files,
         stats=scan_stats,
     )
     return scan_result
