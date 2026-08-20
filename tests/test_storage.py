@@ -1,3 +1,5 @@
+import os
+
 import duckdb
 
 from automation_lab.models import (
@@ -8,6 +10,7 @@ from automation_lab.models import (
     ScanResult,
     ScanStats,
 )
+from automation_lab.scanner import find_duplicates
 from automation_lab.storage import (
     load_hash_cache,
     persist_scan_result,
@@ -216,4 +219,98 @@ def test_persist_scan_result_updates_hash_cache(tmp_path):
         size_bytes=duplicate_record.size_bytes,
         modified_ns=duplicate_record.modified_ns,
         file_hash="example-hash",
+    )
+
+
+def test_persisted_hashes_are_reused_during_next_scan(tmp_path):
+    scan_folder = tmp_path / "scan"
+    scan_folder.mkdir()
+
+    (scan_folder / "original.txt").write_text("same content")
+    (scan_folder / "duplicate.txt").write_text("same content")
+
+    database_path = tmp_path / "history.duckdb"
+
+    first_result = find_duplicates(scan_folder)
+
+    persist_scan_result(
+        database_path=database_path,
+        root_path=scan_folder,
+        scan_result=first_result,
+    )
+
+    hash_cache = load_hash_cache(
+        database_path=database_path,
+        root_path=scan_folder,
+    )
+
+    second_result = find_duplicates(
+        scan_folder,
+        hash_cache=hash_cache,
+    )
+
+    assert len(second_result.duplicate_groups) == 1
+    assert all(hashed_file.reused for hashed_file in second_result.hashed_files)
+    assert second_result.stats == ScanStats(
+        discovered_files=2,
+        hashed_files=0,
+        skipped_files=2,
+    )
+
+
+def test_changed_file_is_rehashed_instead_of_reused(tmp_path):
+    scan_folder = tmp_path / "scan"
+    scan_folder.mkdir()
+
+    unchanged_file = scan_folder / "unchanged.txt"
+    changed_file = scan_folder / "changed.txt"
+
+    unchanged_file.write_text("same content")
+    changed_file.write_text("same content")
+
+    database_path = tmp_path / "history.duckdb"
+
+    first_result = find_duplicates(scan_folder)
+
+    persist_scan_result(
+        database_path=database_path,
+        root_path=scan_folder,
+        scan_result=first_result,
+    )
+
+    original_stat = changed_file.stat()
+
+    # Keep the same file size so both files remain hashing candidates.
+    changed_file.write_text("new! content")
+    os.utime(
+        changed_file,
+        ns=(
+            original_stat.st_atime_ns,
+            original_stat.st_mtime_ns + 1_000_000_000,
+        ),
+    )
+
+    hash_cache = load_hash_cache(
+        database_path=database_path,
+        root_path=scan_folder,
+    )
+
+    second_result = find_duplicates(
+        scan_folder,
+        hash_cache=hash_cache,
+    )
+
+    hashed_files_by_name = {
+        hashed_file.file.path.name: hashed_file
+        for hashed_file in second_result.hashed_files
+    }
+
+    assert hashed_files_by_name["unchanged.txt"].reused is True
+    assert hashed_files_by_name["changed.txt"].reused is False
+
+    assert second_result.duplicate_groups == ()
+    assert second_result.stats == ScanStats(
+        discovered_files=2,
+        hashed_files=1,
+        skipped_files=1,
     )

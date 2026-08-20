@@ -1,7 +1,7 @@
 import pytest
 
 import automation_lab.scanner as scanner_module
-from automation_lab.models import ScanStats
+from automation_lab.models import CachedFile, ScanStats
 from automation_lab.scanner import find_duplicates
 
 
@@ -140,4 +140,44 @@ def test_scan_stats_count_discovered_hashed_and_skipped_files(tmp_path):
         discovered_files=3,
         hashed_files=2,
         skipped_files=1,
+    )
+
+
+def test_reuses_valid_cached_hashes(tmp_path, monkeypatch):
+    original = tmp_path / "original.txt"
+    duplicate = tmp_path / "duplicate.txt"
+
+    original.write_text("same content")
+    duplicate.write_text("same content")
+
+    hash_cache = {}
+
+    for file_path in (original, duplicate):
+        file_stat = file_path.stat()
+        hash_cache[str(file_path.resolve())] = CachedFile(
+            size_bytes=file_stat.st_size,
+            modified_ns=file_stat.st_mtime_ns,
+            file_hash="cached-hash",
+        )
+
+    def fail_if_hash_is_calculated(file_path):
+        pytest.fail(f"Unexpected hash calculation for {file_path}")
+
+    monkeypatch.setattr(
+        scanner_module,
+        "calculate_hash",
+        fail_if_hash_is_calculated,
+    )
+
+    result = find_duplicates(
+        tmp_path,
+        hash_cache=hash_cache,
+    )
+
+    assert len(result.duplicate_groups) == 1
+    assert all(hashed_file.reused for hashed_file in result.hashed_files)
+    assert result.stats == ScanStats(
+        discovered_files=2,
+        hashed_files=0,
+        skipped_files=2,
     )

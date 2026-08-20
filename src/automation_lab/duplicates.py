@@ -5,7 +5,7 @@ from pathlib import Path
 from automation_lab.models import DuplicateGroup, ScanStats
 from automation_lab.reporting import write_report
 from automation_lab.scanner import find_duplicates
-from automation_lab.storage import persist_scan_result
+from automation_lab.storage import load_hash_cache, persist_scan_result
 
 
 def main() -> None:
@@ -14,7 +14,18 @@ def main() -> None:
     scan_folder = args.folder.resolve()
     quarantine_folder = scan_folder / ".duplicates_quarantine"
 
-    scan_result = find_duplicates(scan_folder)
+    hash_cache = {}
+
+    if args.database:
+        hash_cache = load_hash_cache(
+            database_path=args.database,
+            root_path=scan_folder,
+        )
+
+    scan_result = find_duplicates(
+        scan_folder,
+        hash_cache=hash_cache,
+    )
     duplicate_groups = list(scan_result.duplicate_groups)
 
     cleanup_plan = create_cleanup_plan(duplicate_groups)
