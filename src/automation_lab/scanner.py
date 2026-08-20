@@ -2,6 +2,7 @@ import hashlib
 from pathlib import Path
 
 from automation_lab.models import (
+    CachedFile,
     DuplicateGroup,
     FileRecord,
     HashedFile,
@@ -11,6 +12,7 @@ from automation_lab.models import (
 
 
 def calculate_hash(file_path: Path) -> str:
+    """Calculate a file's SHA-256 hash by reading it in 8 KB chunks."""
     hasher = hashlib.sha256()
 
     with file_path.open("rb") as file:
@@ -62,21 +64,37 @@ def group_files_by_size(
 
 def hash_candidate_files(
     files_by_size: dict[int, list[FileRecord]],
+    hash_cache: dict[str, CachedFile] | None = None,
 ) -> tuple[HashedFile, ...]:
+    """Hash same-size candidates, reusing valid cached hashes when available."""
     hashed_files: list[HashedFile] = []
+    hash_cache = hash_cache or {}
 
     for files_with_same_size in files_by_size.values():
         if len(files_with_same_size) == 1:
             continue
 
         for file_record in files_with_same_size:
-            file_hash = calculate_hash(file_record.path)
+            cached_file = hash_cache.get(str(file_record.path.resolve()))
+
+            cache_is_valid = (
+                cached_file is not None
+                and cached_file.size_bytes == file_record.size_bytes
+                and cached_file.modified_ns == file_record.modified_ns
+            )
+
+            if cache_is_valid:
+                file_hash = cached_file.file_hash
+                reused = True
+            else:
+                file_hash = calculate_hash(file_record.path)
+                reused = False
 
             hashed_files.append(
                 HashedFile(
                     file=file_record,
                     file_hash=file_hash,
-                    reused=False,
+                    reused=reused,
                 )
             )
 
@@ -106,24 +124,31 @@ def create_duplicate_groups(
     return duplicate_groups
 
 
-def find_duplicates(folder: Path) -> ScanResult:
-    """Find duplicate files and return groups with scan statistics."""
+def find_duplicates(
+    folder: Path,
+    hash_cache: dict[str, CachedFile] | None = None,
+) -> ScanResult:
+    """Find duplicate files, optionally reusing hashes from an earlier scan."""
     validate_scan_folder(folder)
 
     discovered_files = discover_files(folder)
     files_by_size = group_files_by_size(discovered_files)
-    hashed_files = hash_candidate_files(files_by_size)
+    hashed_files = hash_candidate_files(
+        files_by_size,
+        hash_cache=hash_cache,
+    )
     duplicate_groups = create_duplicate_groups(hashed_files)
+
+    calculated_hashes = sum(not hashed_file.reused for hashed_file in hashed_files)
 
     scan_stats = ScanStats(
         discovered_files=len(discovered_files),
-        hashed_files=len(hashed_files),
-        skipped_files=len(discovered_files) - len(hashed_files),
+        hashed_files=calculated_hashes,
+        skipped_files=len(discovered_files) - calculated_hashes,
     )
 
-    scan_result = ScanResult(
+    return ScanResult(
         duplicate_groups=tuple(duplicate_groups),
         hashed_files=hashed_files,
         stats=scan_stats,
     )
-    return scan_result
